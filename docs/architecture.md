@@ -88,7 +88,7 @@ flowchart TB
 
 **Задача:** сформировать финальный отчёт для врача.
 
-**Вход:** PICO + оценки Critic + источники с абстрактами.
+**Вход:** PICO + результаты Scoping + оценки Critic + результаты Meta-Checker + источники с абстрактами.
 **Выход:** Markdown-отчёт со структурой: PICO → клинический вывод → таблица включённых исследований → сводка доказательной базы → ограничения → PRISMA-диаграмма.
 
 **Модель:** `qwen3-235b-a22b-fp8/latest` — большая модель для финального синтеза, лучшая работа с длинным контекстом.
@@ -135,7 +135,7 @@ sources = deduplicate_by_pmid(sources)[:max_sources]
 scoping = scope_field(client, pico, sources)
 critiques = critique_sources(client, pico, sources)
 meta_check = check_meta_feasibility(client, pico, critiques, sources)
-report = synthesize_report(client, pico, critiques, sources)
+report = synthesize_report(client, pico, critiques, sources, scoping=scoping, meta_check=meta_check)
 ```
 
 Подробности по структурам данных — [data_schema.md](data_schema.md).
@@ -144,7 +144,7 @@ report = synthesize_report(client, pico, critiques, sources)
 
 - **Dockerfile:** `python:3.11-slim`, установка зависимостей через pip с фиксированными версиями
 - **docker-compose.yml:** один сервис `app`, проброс порта 8501, монтирование `.env`
-- **requirements.txt:** все зависимости с точными версиями (torch CPU-only через `--extra-index-url`)
+- **requirements.txt:** все зависимости с фиксированными версиями (openai, requests, python-dotenv, streamlit)
 - Команды для развёртывания — [DEPLOY.md](../DEPLOY.md)
 
 ## Ключевые архитектурные решения

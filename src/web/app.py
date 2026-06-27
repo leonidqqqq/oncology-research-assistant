@@ -182,7 +182,7 @@ st.markdown("""
 
 
 def init_session_state():
-    for k in ["pico", "sources", "scoping", "critiques", "report"]:
+    for k in ["pico", "sources", "scoping", "critiques", "meta_check", "report"]:
         if k not in st.session_state:
             st.session_state[k] = None
     if "question" not in st.session_state:
@@ -190,7 +190,7 @@ def init_session_state():
 
 
 def reset_results():
-    for k in ["pico", "sources", "scoping", "critiques", "report"]:
+    for k in ["pico", "sources", "scoping", "critiques", "meta_check", "report"]:
         st.session_state[k] = None
 
 
@@ -200,7 +200,7 @@ def run_analysis(question: str, max_sources: int):
     progress = st.progress(0, text="Подготовка...")
     status = st.empty()
     
-    status.markdown("**Шаг 1 из 5** — Verifier структурирует вопрос в PICO")
+    status.markdown("**Шаг 1 из 6** — Verifier структурирует вопрос в PICO")
     progress.progress(10)
     pico = verify_question(client, question)
     st.session_state.pico = pico
@@ -212,7 +212,7 @@ def run_analysis(question: str, max_sources: int):
         return
     
     progress.progress(20)
-    status.markdown("**Шаг 2 из 5** — Researcher ищет источники в PubMed")
+    status.markdown("**Шаг 2 из 6** — Researcher ищет источники в PubMed")
     
     queries = pico.get("search_queries", {})
     seen_pmids = set()
@@ -241,17 +241,24 @@ def run_analysis(question: str, max_sources: int):
         return
     
     progress.progress(40)
-    status.markdown(f"**Шаг 3 из 5** — Scoping картирует научное поле ({len(sources)} источников)")
+    status.markdown(f"**Шаг 3 из 6** — Scoping картирует научное поле ({len(sources)} источников)")
     scoping = scope_field(client, pico, sources)
     st.session_state.scoping = scoping
     
     progress.progress(60)
-    status.markdown("**Шаг 4 из 5** — Critic оценивает качество каждого источника")
+    status.markdown("**Шаг 4 из 6** — Critic оценивает качество каждого источника")
     critiques = critique_sources(client, pico, sources)
     st.session_state.critiques = critiques
     
+    from src.agents.meta_checker import check_meta_feasibility
+    
     progress.progress(80)
-    status.markdown("**Шаг 5 из 5** — Synthesizer формирует доказательный отчёт")
+    status.markdown("**Шаг 5 из 6** — Meta-Checker оценивает возможность метаанализа")
+    meta_check = check_meta_feasibility(client, pico, critiques, sources)
+    st.session_state.meta_check = meta_check
+    
+    progress.progress(90)
+    status.markdown("**Шаг 6 из 6** — Synthesizer формирует доказательный отчёт")
     report = synthesize_report(client, pico, critiques, sources)
     st.session_state.report = report
     
@@ -352,6 +359,81 @@ def study_type_badge(stype: str) -> str:
         return '<span class="badge badge-rct">RCT</span>'
     return f'<span class="badge badge-evidence">{stype}</span>'
 
+def render_meta_check(meta_check: dict):
+    """Отображает блок Meta-Analysis Feasibility."""
+    if not meta_check:
+        return
+    
+    st.markdown("## Возможность метаанализа")
+    
+    feasibility = meta_check.get("feasibility", "not_possible")
+    label = meta_check.get("feasibility_label", "—")
+    n_rcts = meta_check.get("n_rcts", 0)
+    
+    # Цвет бейджа по статусу
+    color_map = {
+        "possible": "#2EA043",
+        "partially_possible": "#D29922",
+        "not_possible": "#6E7681",
+    }
+    badge_color = color_map.get(feasibility, "#6E7681")
+    
+    st.markdown(f"""
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem;">
+            <span style="background: {badge_color}; color: white; padding: 0.3rem 0.8rem; 
+                         border-radius: 8px; font-weight: 600; font-size: 0.9rem;">
+                {label}
+            </span>
+            <span style="color: #8B949E;">Включённых РКИ: <b style="color: #E8EAED;">{n_rcts}</b></span>
+        </div>
+        <div style="color: #E8EAED; font-size: 0.95rem; line-height: 1.5;">
+            {meta_check.get("recommendation", "")}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Гомогенность
+    homo = meta_check.get("homogeneity_assessment", {})
+    if homo:
+        col1, col2 = st.columns(2)
+        homo_label_map = {
+            "homogeneous": ("Однородна", "#2EA043"),
+            "moderately_heterogeneous": ("Умеренно гетерогенна", "#D29922"),
+            "heterogeneous": ("Гетерогенна", "#F85149"),
+        }
+        with col1:
+            pop_val, pop_color = homo_label_map.get(homo.get("population", ""), (homo.get("population", "—"), "#6E7681"))
+            st.markdown(f"**Популяция:** <span style='color: {pop_color};'>{pop_val}</span>", unsafe_allow_html=True)
+        with col2:
+            int_val, int_color = homo_label_map.get(homo.get("intervention", ""), (homo.get("intervention", "—"), "#6E7681"))
+            st.markdown(f"**Вмешательства:** <span style='color: {int_color};'>{int_val}</span>", unsafe_allow_html=True)
+        
+        if homo.get("notes"):
+            st.markdown(f"<div style='color: #8B949E; font-size: 0.85rem; margin-top: 0.4rem;'>{homo['notes']}</div>", unsafe_allow_html=True)
+    
+    # Исходы с данными
+    outcomes = meta_check.get("outcomes_with_enough_data", [])
+    if outcomes:
+        st.markdown("**Исходы с достаточностью данных**")
+        for o in outcomes:
+            quality = o.get("data_quality", "—")
+            q_badge = quality_badge(quality) if quality in ("high", "moderate", "low") else f'<span class="badge badge-evidence">{quality}</span>'
+            st.markdown(
+                f"<div class='source-included' style='border-left-color: #2EA043;'>"
+                f"<b>{o.get('outcome', '—')}</b> {q_badge} "
+                f"<span style='color: #8B949E;'>· {o.get('n_studies_reporting', 0)} исследований</span>"
+                f"<div style='color: #8B949E; font-size: 0.85rem; margin-top: 0.3rem;'>{o.get('notes', '')}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+    
+    # Ограничения
+    limitations = meta_check.get("limitations", [])
+    if limitations:
+        st.markdown("**Ограничения**")
+        for lim in limitations:
+            st.markdown(f"- {lim}")
 
 def render_sources(sources: list, critiques: list):
     if not sources:
@@ -505,6 +587,9 @@ if st.session_state.scoping:
 
 if st.session_state.sources:
     render_sources(st.session_state.sources, st.session_state.critiques)
+
+if st.session_state.meta_check:
+    render_meta_check(st.session_state.meta_check)
 
 if st.session_state.report:
     st.markdown("## Финальный аналитический отчёт")

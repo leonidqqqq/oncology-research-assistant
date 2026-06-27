@@ -1,4 +1,4 @@
-"""Главный оркестратор: вопрос → Verifier → Researcher → Critic → Synthesizer → отчёт."""
+"""Главный оркестратор: вопрос → Verifier → Researcher → Scoping → Critic → Meta-Checker → Synthesizer → отчёт."""
 from openai import OpenAI
 
 from src.agents.verifier import verify_question
@@ -13,20 +13,28 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
     """Полный аналитический пайплайн.
     
     Args:
-        client: клиент Gemini
+        client: OpenAI-клиент, настроенный на Yandex AI Studio (от get_client())
         question: свободный вопрос врача
         max_sources: максимум источников для поиска
         verbose: печатать ли промежуточные шаги
     
     Returns:
-        dict с полями: pico, sources, critiques, report
+        dict с полями: pico, sources, scoping, critiques, meta_check, report
     """
     if verbose:
         print("=" * 60)
         print("Шаг 1/6: Verifier — структурирование вопроса в PICO")
         print("=" * 60)
     
-    pico = verify_question(client, question)
+    try:
+        pico = verify_question(client, question)
+    except Exception as e:
+        return {
+            "pico": {},
+            "sources": [],
+            "critiques": [],
+            "report": f"Ошибка на этапе Verifier: {e}\n\nПопробуйте переформулировать вопрос."
+        }
     
     if not pico.get("is_answerable"):
         return {
@@ -41,16 +49,17 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         print(f"Intervention: {pico.get('intervention', '')}")
         print(f"Comparator: {pico.get('comparator', '')}")
         print(f"Outcomes: {pico.get('outcomes', '')}")
-        print(f"Search queries: {len(pico.get('search_queries', {}))} разных запросов")      
+        print(f"Search queries: {len(pico.get('search_queries', {}))} разных запросов")
         print()
         print("=" * 60)
         print("Шаг 2/6: Researcher — поиск в PubMed")
         print("=" * 60)
     
-# Запускаем 3 разных запроса, объединяем уникальные источники
+    # Запускаем 3 разных запроса, объединяем уникальные источники
     queries = pico.get("search_queries", {})
     seen_pmids = set()
     sources = []
+    failed_queries = 0
     
     per_query_limit = max(3, max_sources // 3)
     
@@ -60,16 +69,17 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         if verbose:
             print(f"  [{query_type}] {query}")
         batch = search_pubmed_direct(query, max_results=per_query_limit)
+        if not batch:
+            failed_queries += 1
         for s in batch:
             pmid = s.get("pmid")
             if pmid and pmid not in seen_pmids:
                 seen_pmids.add(pmid)
                 sources.append(s)
-        # Если уже набрали достаточно — стоп
         if len(sources) >= max_sources:
             break
     
-    sources = sources[:max_sources]    
+    sources = sources[:max_sources]
     if verbose:
         print(f"Найдено источников: {len(sources)}")
         for s in sources:
@@ -77,11 +87,22 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         print()
     
     if not sources:
+        total_queries = len([q for q in queries.values() if q])
+        if failed_queries == total_queries and total_queries > 0:
+            err_msg = (
+                "Не удалось получить данные из PubMed (возможно, временные проблемы сети "
+                "или лимит запросов). Попробуйте позже."
+            )
+        else:
+            err_msg = (
+                "По данному запросу источников в PubMed не найдено. "
+                "Попробуйте переформулировать вопрос или использовать более общие термины."
+            )
         return {
             "pico": pico,
             "sources": [],
             "critiques": [],
-            "report": "По данному запросу источников в PubMed не найдено."
+            "report": err_msg
         }
     
     if verbose:
@@ -89,7 +110,12 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         print("Шаг 3/6: Scoping — обзор научного поля")
         print("=" * 60)
     
-    scoping = scope_field(client, pico, sources)
+    try:
+        scoping = scope_field(client, pico, sources)
+    except Exception as e:
+        if verbose:
+            print(f"[WARN] Scoping не выполнен: {e}")
+        scoping = {}
     
     if verbose:
         pub_types = scoping.get("publication_types", {})
@@ -104,7 +130,16 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         print("Шаг 4/6: Critic — оценка качества каждого источника")
         print("=" * 60)
     
-    critiques = critique_sources(client, pico, sources)
+    try:
+        critiques = critique_sources(client, pico, sources)
+    except Exception as e:
+        return {
+            "pico": pico,
+            "sources": sources,
+            "scoping": scoping,
+            "critiques": [],
+            "report": f"Ошибка на этапе Critic: {e}"
+        }
     
     if verbose:
         included = sum(1 for c in critiques if c.get("include"))
@@ -118,7 +153,12 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         print("Шаг 5/6: Meta-Checker — оценка возможности метаанализа")
         print("=" * 60)
     
-    meta_check = check_meta_feasibility(client, pico, critiques, sources)
+    try:
+        meta_check = check_meta_feasibility(client, pico, critiques, sources)
+    except Exception as e:
+        if verbose:
+            print(f"[WARN] Meta-Checker не выполнен: {e}")
+        meta_check = {}
     
     if verbose:
         print(f"Метаанализ: {meta_check.get('feasibility_label', '—')}")
@@ -131,7 +171,17 @@ def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: 
         print("Шаг 6/6: Synthesizer — формирование отчёта")
         print("=" * 60)
     
-    report = synthesize_report(client, pico, critiques, sources)
+    try:
+        report = synthesize_report(client, pico, critiques, sources, scoping=scoping, meta_check=meta_check)
+    except Exception as e:
+        return {
+            "pico": pico,
+            "sources": sources,
+            "scoping": scoping,
+            "critiques": critiques,
+            "meta_check": meta_check,
+            "report": f"Ошибка на этапе Synthesizer: {e}"
+        }
     
     if verbose:
         print("Отчёт сгенерирован.")

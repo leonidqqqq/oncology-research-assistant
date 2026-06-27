@@ -523,7 +523,7 @@ st.markdown("""
         и формирует отчёт с цитированием источников.
     </div>
     <div class="pipeline-flow">
-        Verifier → Researcher → Scoping → Critic → Synthesizer
+        Verifier → Researcher → Scoping → Critic → Meta-Checker → Synthesizer
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -580,11 +580,7 @@ if run_clicked:
     else:
         st.session_state.question = question
         reset_results()
-        try:
-            run_analysis(question.strip(), max_sources)
-        except Exception as e:
-            st.error(f"Ошибка во время анализа: {e}")
-            raise
+        run_analysis(question.strip(), max_sources)
 
 # Результаты
 if st.session_state.pico:

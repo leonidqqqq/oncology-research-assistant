@@ -5,7 +5,6 @@
 изучались, какие исходы оценивались, где пробелы.
 """
 import json
-import re
 from openai import OpenAI
 
 from src.utils.llm_client import call_llm, extract_json
@@ -67,7 +66,7 @@ def scope_field(client: OpenAI, pico: dict, sources: list) -> dict:
         f"Title: {s.get('title', '')}\n"
         f"Year: {s.get('year', '')}\n"
         f"Journal: {s.get('journal', '')}\n"
-        f"Abstract: {s.get('abstract', '')[:1200]}"
+        f"Abstract: {s.get('abstract', '')[:2000]}"
         for i, s in enumerate(sources)
     ])
     

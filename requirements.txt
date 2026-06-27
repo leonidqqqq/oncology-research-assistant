@@ -1,8 +1,9 @@
-google-genai==2.9.0
+# LLM client (OpenAI-compatible API для Yandex AI Studio)
+openai==2.44.0
+
+# Environment & HTTP
 python-dotenv==1.0.1
 requests==2.32.3
-pypdf==4.3.1
-numpy==1.26.4
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.6.0+cpu
-sentence-transformers==3.0.1
+
+# Web UI
+streamlit==1.58.0

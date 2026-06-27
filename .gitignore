@@ -8,17 +8,23 @@ secrets.yaml
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 venv/
+.venv/
 *.egg-info/
+.pytest_cache/
+
+# Streamlit
+.streamlit/secrets.toml
 
 # macOS
 .DS_Store
 
-# Old project artifacts
-docs/статья*.pdf
-index.json
-*.db
-
 # IDE
 .vscode/
 .idea/
+*.swp
+
+# Old artifacts
+index.json
+*.db

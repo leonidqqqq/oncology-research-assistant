@@ -6,7 +6,6 @@ from openai import OpenAI
 
 YANDEX_BASE_URL = "https://llm.api.cloud.yandex.net/v1"
 
-
 # Распределение моделей по агентам
 MODEL_FOR_AGENT = {
     "verifier": "yandexgpt/rc",
@@ -15,6 +14,13 @@ MODEL_FOR_AGENT = {
     "synthesizer": "qwen3-235b-a22b-fp8/latest",
 }
 
+# Таймаут одного запроса в секундах. Yandex обычно отвечает за 5-30 сек.
+# 120 — буфер на длинные ответы Synthesizer.
+LLM_TIMEOUT_SECONDS = 120
+
+# Задержки между retry-попытками
+RETRY_DELAYS = [2, 5, 12]
+
 
 def get_client() -> OpenAI:
     """Создаёт OpenAI-клиент, настроенный на Yandex AI Studio."""
@@ -22,7 +28,11 @@ def get_client() -> OpenAI:
     if not api_key:
         raise RuntimeError("YANDEX_API_KEY не найден в окружении (.env)")
     
-    return OpenAI(api_key=api_key, base_url=YANDEX_BASE_URL)
+    return OpenAI(
+        api_key=api_key,
+        base_url=YANDEX_BASE_URL,
+        timeout=LLM_TIMEOUT_SECONDS,
+    )
 
 
 def get_model_uri(agent: str) -> str:
@@ -58,10 +68,15 @@ def call_llm(
         temperature: 0.0-1.0, для структурированных задач ставь 0.1-0.2
         max_tokens: лимит выходных токенов
         max_retries: число попыток при сбое (429, 503, network)
-        response_format_json: если True — попросить вернуть JSON
+        response_format_json: если True — попросить вернуть JSON.
+            ВНИМАНИЕ: Yandex AI Studio часто возвращает невалидный JSON в этом режиме
+            для русского текста — лучше использовать собственный _extract_json() в агентах.
     
     Returns:
-        строка с ответом модели
+        строка с ответом модели (никогда не None — при пустом ответе возвращает "").
+    
+    Raises:
+        RuntimeError: если все попытки исчерпаны
     """
     model_uri = get_model_uri(agent)
     
@@ -78,26 +93,40 @@ def call_llm(
     }
     
     if response_format_json:
-        # Yandex поддерживает response_format в OpenAI-совместимом API
         kwargs["response_format"] = {"type": "json_object"}
     
     last_error = None
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(**kwargs)
-            return response.choices[0].message.content or ""
+            
+            # Защита от пустого ответа
+            if not response.choices:
+                last_error = "API вернул пустой choices"
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_DELAYS[attempt])
+                    continue
+                raise RuntimeError(f"[{agent}] API вернул пустой ответ после {max_retries} попыток")
+            
+            content = response.choices[0].message.content
+            return content or ""
+            
         except Exception as e:
             last_error = e
             err_str = str(e)
+            
             # Ретраим только на временных ошибках
-            if any(code in err_str for code in ["429", "503", "504", "timeout", "TIMEOUT"]):
-                wait = 2 ** attempt  # 1, 2, 4 секунды
-                print(f"[{agent}] Временная ошибка (попытка {attempt+1}/{max_retries}): {err_str[:100]}")
+            retriable_markers = ["429", "503", "504", "timeout", "TIMEOUT", "Connection", "connection"]
+            is_retriable = any(marker in err_str for marker in retriable_markers)
+            
+            if is_retriable and attempt < max_retries - 1:
+                wait = RETRY_DELAYS[attempt]
+                print(f"[{agent}] Временная ошибка (попытка {attempt+1}/{max_retries}): {err_str[:200]}")
                 print(f"[{agent}] Жду {wait} сек и повторяю...")
                 time.sleep(wait)
                 continue
-            # На постоянных ошибках сразу падаем
+            
+            # Не retriable или попытки исчерпаны
             raise
     
-    # Все попытки исчерпаны
     raise RuntimeError(f"[{agent}] Не удалось выполнить запрос после {max_retries} попыток: {last_error}")

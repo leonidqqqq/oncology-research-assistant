@@ -3,7 +3,7 @@ import json
 import re
 from openai import OpenAI
 
-from src.utils.llm_client import call_llm
+from src.utils.llm_client import call_llm, extract_json
 
 
 CRITIC_PROMPT = """Ты — Critic-агент в системе AI-ассистента для онкологов.
@@ -79,20 +79,6 @@ CRITIC_PROMPT = """Ты — Critic-агент в системе AI-ассист�
 }"""
 
 
-def _extract_json(text: str) -> str:
-    """Извлекает JSON из ответа модели, убирая markdown-обёртку."""
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    # Ищем объект или массив
-    match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
-    if match:
-        return match.group(0)
-    return text.strip()
 
 
 def critique_sources(client: OpenAI, pico: dict, sources: list) -> list:
@@ -114,7 +100,7 @@ def critique_sources(client: OpenAI, pico: dict, sources: list) -> list:
         f"Title: {s.get('title', '')}\n"
         f"Year: {s.get('year', '')}\n"
         f"Journal: {s.get('journal', '')}\n"
-        f"Abstract: {s.get('abstract', '')[:1500]}"
+        f"Abstract: {s.get('abstract', '')[:3000]}"
         for i, s in enumerate(sources)
     ])
     
@@ -139,7 +125,7 @@ Outcomes: {pico.get('outcomes', '')}
         max_tokens=8000,
     )
     
-    cleaned = _extract_json(raw)
+    cleaned = extract_json(raw)
     
     try:
         parsed = json.loads(cleaned)

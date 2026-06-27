@@ -10,7 +10,7 @@ import json
 import re
 from openai import OpenAI
 
-from src.utils.llm_client import call_llm
+from src.utils.llm_client import call_llm, extract_json
 
 
 META_CHECKER_PROMPT = """Ты — Meta-Analysis Feasibility Checker в системе AI-ассистента для онкологов.
@@ -64,19 +64,6 @@ META_CHECKER_PROMPT = """Ты — Meta-Analysis Feasibility Checker в сист�
 """
 
 
-def _extract_json(text: str) -> str:
-    """Извлекает JSON из ответа модели."""
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        return match.group(0)
-    return text.strip()
 
 
 def check_meta_feasibility(
@@ -130,7 +117,7 @@ def check_meta_feasibility(
             f"Year: {source.get('year', '')}\n"
             f"Study type: {c.get('study_type', '')}\n"
             f"Quality: {c.get('quality_assessment', '')}\n"
-            f"Abstract: {source.get('abstract', '')[:1500]}"
+            f"Abstract: {source.get('abstract', '')[:3000]}"
         )
     
     all_included = "\n\n========\n\n".join(included_text)
@@ -156,7 +143,7 @@ Outcomes: {pico.get('outcomes', '')}
         max_tokens=4000,
     )
     
-    cleaned = _extract_json(raw)
+    cleaned = extract_json(raw)
     
     try:
         result = json.loads(cleaned)

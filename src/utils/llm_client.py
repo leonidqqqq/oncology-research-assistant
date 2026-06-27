@@ -130,3 +130,32 @@ def call_llm(
             raise
     
     raise RuntimeError(f"[{agent}] Не удалось выполнить запрос после {max_retries} попыток: {last_error}")
+
+
+def extract_json(text: str) -> str:
+    """Извлекает JSON из ответа модели, убирая markdown-обёртку и текст вокруг.
+    
+    Поддерживает:
+    - ```json ... ``` (markdown-обёртка)
+    - {...} или [...] внутри текста
+    - чистый JSON
+    
+    Возвращает строку для дальнейшего json.loads().
+    Если JSON не найден, возвращает исходный текст без изменений.
+    """
+    import re
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    # Сначала пытаемся найти объект, потом массив
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        return match.group(0)
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    if match:
+        return match.group(0)
+    return text.strip()

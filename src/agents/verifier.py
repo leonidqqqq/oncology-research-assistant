@@ -3,7 +3,7 @@ import json
 import re
 from openai import OpenAI
 
-from src.utils.llm_client import call_llm
+from src.utils.llm_client import call_llm, extract_json
 
 
 VERIFIER_PROMPT = """Ты — Verifier-агент в системе AI-ассистента для онкологов.
@@ -46,20 +46,6 @@ PICO:
 }"""
 
 
-def _extract_json(text: str) -> str:
-    """Извлекает JSON из ответа модели, убирая markdown-обёртку если есть."""
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    # Если есть текст вокруг JSON, попробуем выделить сам объект
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        return match.group(0)
-    return text.strip()
 
 
 def verify_question(client: OpenAI, question: str) -> dict:
@@ -82,7 +68,7 @@ def verify_question(client: OpenAI, question: str) -> dict:
         max_tokens=2000,
     )
     
-    cleaned = _extract_json(raw)
+    cleaned = extract_json(raw)
     
     try:
         pico = json.loads(cleaned)

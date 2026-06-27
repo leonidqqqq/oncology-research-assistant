@@ -15,6 +15,7 @@ from src.agents.researcher import search_pubmed_direct
 from src.agents.scoping import scope_field
 from src.agents.critic import critique_sources
 from src.agents.synthesizer import synthesize_report
+from src.agents.meta_checker import check_meta_feasibility
 
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -195,6 +196,15 @@ def reset_results():
 
 
 def run_analysis(question: str, max_sources: int):
+    try:
+        _run_analysis_impl(question, max_sources)
+    except Exception as e:
+        st.error(f"Ошибка во время анализа: {e}")
+        st.info("Возможные причины: проблемы с сетью (PubMed/Yandex AI Studio), превышен лимит запросов, или вопрос требует переформулировки.")
+        st.session_state.report = None
+
+
+def _run_analysis_impl(question: str, max_sources: int):
     client = get_client()
     
     progress = st.progress(0, text="Подготовка...")
@@ -250,8 +260,6 @@ def run_analysis(question: str, max_sources: int):
     critiques = critique_sources(client, pico, sources)
     st.session_state.critiques = critiques
     
-    from src.agents.meta_checker import check_meta_feasibility
-    
     progress.progress(80)
     status.markdown("**Шаг 5 из 6** — Meta-Checker оценивает возможность метаанализа")
     meta_check = check_meta_feasibility(client, pico, critiques, sources)
@@ -259,7 +267,7 @@ def run_analysis(question: str, max_sources: int):
     
     progress.progress(90)
     status.markdown("**Шаг 6 из 6** — Synthesizer формирует доказательный отчёт")
-    report = synthesize_report(client, pico, critiques, sources)
+    report = synthesize_report(client, pico, critiques, sources, scoping=scoping, meta_check=meta_check)
     st.session_state.report = report
     
     progress.progress(100)

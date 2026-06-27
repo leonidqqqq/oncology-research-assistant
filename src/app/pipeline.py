@@ -39,14 +39,35 @@ def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, ver
         print(f"Intervention: {pico.get('intervention', '')}")
         print(f"Comparator: {pico.get('comparator', '')}")
         print(f"Outcomes: {pico.get('outcomes', '')}")
-        print(f"Search query: {pico.get('search_query', '')}")
+        print(f"Search queries: {len(pico.get('search_queries', {}))} разных запросов")      
         print()
         print("=" * 60)
         print("Шаг 2/4: Researcher — поиск в PubMed")
         print("=" * 60)
     
-    sources = search_pubmed_direct(pico["search_query"], max_results=max_sources)
+# Запускаем 3 разных запроса, объединяем уникальные источники
+    queries = pico.get("search_queries", {})
+    seen_pmids = set()
+    sources = []
     
+    per_query_limit = max(3, max_sources // 3)
+    
+    for query_type, query in queries.items():
+        if not query:
+            continue
+        if verbose:
+            print(f"  [{query_type}] {query}")
+        batch = search_pubmed_direct(query, max_results=per_query_limit)
+        for s in batch:
+            pmid = s.get("pmid")
+            if pmid and pmid not in seen_pmids:
+                seen_pmids.add(pmid)
+                sources.append(s)
+        # Если уже набрали достаточно — стоп
+        if len(sources) >= max_sources:
+            break
+    
+    sources = sources[:max_sources]    
     if verbose:
         print(f"Найдено источников: {len(sources)}")
         for s in sources:

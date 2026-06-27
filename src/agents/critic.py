@@ -118,7 +118,7 @@ Outcomes: {pico.get('outcomes', '')}
         config=types.GenerateContentConfig(
             system_instruction=CRITIC_PROMPT,
             temperature=0.1,
-            max_output_tokens=4000,
+            max_output_tokens=8000,
             response_mime_type="application/json"
         )
     )
@@ -128,7 +128,11 @@ Outcomes: {pico.get('outcomes', '')}
     try:
         assessments = json.loads(raw)
         if not isinstance(assessments, list):
+            print(f"[Critic] WARNING: ответ не массив, тип: {type(assessments).__name__}")
             return []
         return assessments
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"[Critic] WARNING: не удалось распарсить JSON ({e}). Длина ответа: {len(raw)} символов")
+        print(f"[Critic] Первые 300 символов ответа: {raw[:300]}")
+        print(f"[Critic] Последние 100 символов ответа: ...{raw[-100:]}")
         return []

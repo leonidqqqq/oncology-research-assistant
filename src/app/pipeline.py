@@ -1,13 +1,14 @@
 """Главный оркестратор: вопрос → Verifier → Researcher → Critic → Synthesizer → отчёт."""
-from google import genai
+from openai import OpenAI
 
 from src.agents.verifier import verify_question
 from src.agents.researcher import search_pubmed_direct
+from src.agents.scoping import scope_field
 from src.agents.critic import critique_sources
 from src.agents.synthesizer import synthesize_report
 
 
-def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, verbose: bool = True) -> dict:
+def run_pipeline(client: OpenAI, question: str, max_sources: int = 10, verbose: bool = True) -> dict:
     """Полный аналитический пайплайн.
     
     Args:
@@ -21,7 +22,7 @@ def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, ver
     """
     if verbose:
         print("=" * 60)
-        print("Шаг 1/4: Verifier — структурирование вопроса в PICO")
+        print("Шаг 1/5: Verifier — структурирование вопроса в PICO")
         print("=" * 60)
     
     pico = verify_question(client, question)
@@ -42,7 +43,7 @@ def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, ver
         print(f"Search queries: {len(pico.get('search_queries', {}))} разных запросов")      
         print()
         print("=" * 60)
-        print("Шаг 2/4: Researcher — поиск в PubMed")
+        print("Шаг 2/5: Researcher — поиск в PubMed")
         print("=" * 60)
     
 # Запускаем 3 разных запроса, объединяем уникальные источники
@@ -84,7 +85,22 @@ def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, ver
     
     if verbose:
         print("=" * 60)
-        print("Шаг 3/4: Critic — оценка качества каждого источника")
+        print("Шаг 3/5: Scoping — обзор научного поля")
+        print("=" * 60)
+    
+    scoping = scope_field(client, pico, sources)
+    
+    if verbose:
+        pub_types = scoping.get("publication_types", {})
+        print(f"Типы публикаций: {pub_types}")
+        gaps = scoping.get("knowledge_gaps", [])
+        if gaps:
+            print(f"Пробелы в исследованиях:")
+            for gap in gaps:
+                print(f"  - {gap}")
+        print()
+        print("=" * 60)
+        print("Шаг 4/5: Critic — оценка качества каждого источника")
         print("=" * 60)
     
     critiques = critique_sources(client, pico, sources)
@@ -98,7 +114,7 @@ def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, ver
             print(f"  [{include_mark}] PMID {c.get('pmid')} — {c.get('study_type')} L{c.get('evidence_level')}")
         print()
         print("=" * 60)
-        print("Шаг 4/4: Synthesizer — формирование отчёта")
+        print("Шаг 5/5: Synthesizer — формирование отчёта")
         print("=" * 60)
     
     report = synthesize_report(client, pico, critiques, sources)
@@ -110,6 +126,7 @@ def run_pipeline(client: genai.Client, question: str, max_sources: int = 10, ver
     return {
         "pico": pico,
         "sources": sources,
+        "scoping": scoping,
         "critiques": critiques,
         "report": report
     }

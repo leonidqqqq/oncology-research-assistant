@@ -1,7 +1,9 @@
 """Verifier-агент: структурирует свободный вопрос врача в PICO."""
 import json
-from google import genai
-from google.genai import types
+import re
+from openai import OpenAI
+
+from src.utils.llm_client import call_llm
 
 
 VERIFIER_PROMPT = """Ты — Verifier-агент в системе AI-ассистента для онкологов.
@@ -19,16 +21,10 @@ PICO:
 просто ключевые слова через пробел, БЕЗ MeSH-тегов, БЕЗ скобок, БЕЗ AND/OR, БЕЗ кавычек. 
 Каждый запрос 3-6 слов.
 
-1. broad: широкий запрос с основными терминами
-   Пример: "osimertinib NSCLC T790M"
-   
-2. specific: более узкий, с биомаркером/линией терапии
-   Пример: "osimertinib T790M resistance second-line"
-   
-3. trials_focused: запрос с упоминанием конкретного известного исследования
-   Если знаешь имя ключевого РКИ по теме (AURA3, FLAURA, KEYNOTE-189, PACIFIC и т.д.) — 
-   добавь его в запрос. Если не знаешь — добавь "randomized trial" или "phase 3".
-   Пример: "AURA3 osimertinib T790M" или "osimertinib T790M randomized trial"
+- broad: широкий запрос с 3-4 основными терминами (препарат, диагноз, биомаркер)
+- specific: узкий запрос с биомаркером/линией терапии/механизмом резистентности
+- trials_focused: запрос, добавляющий название известного РКИ (если знаешь — AURA3, FLAURA, 
+  KEYNOTE-189, PACIFIC и т.д.) или слова "randomized trial" или "phase 3"
 
 Также определи:
 - is_answerable: можно ли на этот вопрос ответить через анализ литературы (true/false)
@@ -50,37 +46,53 @@ PICO:
 }"""
 
 
-def verify_question(client: genai.Client, question: str) -> dict:
+def _extract_json(text: str) -> str:
+    """Извлекает JSON из ответа модели, убирая markdown-обёртку если есть."""
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    # Если есть текст вокруг JSON, попробуем выделить сам объект
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        return match.group(0)
+    return text.strip()
+
+
+def verify_question(client: OpenAI, question: str) -> dict:
     """Структурирует вопрос врача в PICO.
     
     Args:
-        client: инициализированный клиент Gemini
+        client: OpenAI-клиент, настроенный на Yandex AI Studio (от get_client())
         question: свободный вопрос на естественном языке
     
     Returns:
         dict с полями population, intervention, comparator, outcomes,
-        search_query, is_answerable, clarification_needed
+        search_queries, is_answerable, clarification_needed
     """
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[{"role": "user", "parts": [{"text": question}]}],
-        config=types.GenerateContentConfig(
-            system_instruction=VERIFIER_PROMPT,
-            temperature=0.1,
-            max_output_tokens=2000,
-            response_mime_type="application/json"
-        )
+    raw = call_llm(
+        client=client,
+        agent="verifier",
+        system_prompt=VERIFIER_PROMPT,
+        user_message=question,
+        temperature=0.1,
+        max_tokens=2000,
     )
     
-    raw = response.text or "{}"
+    cleaned = _extract_json(raw)
     
     try:
-        pico = json.loads(raw)
+        pico = json.loads(cleaned)
         if not isinstance(pico, dict):
             print(f"[Verifier] WARNING: ожидался dict, получили {type(pico).__name__}")
             print(f"[Verifier] Первые 300 символов: {raw[:300]}")
             raise ValueError("not a dict")
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[Verifier] WARNING: не удалось распарсить JSON ({e})")
+        print(f"[Verifier] Первые 300 символов: {raw[:300]}")
         return {
             "population": "parse error",
             "intervention": "parse error",
@@ -89,10 +101,10 @@ def verify_question(client: genai.Client, question: str) -> dict:
             "search_queries": {
                 "broad": question,
                 "specific": question,
-                "trials_focused": question
+                "trials_focused": question,
             },
             "is_answerable": False,
-            "clarification_needed": f"Не удалось распарсить PICO: {raw[:200]}"
+            "clarification_needed": f"Не удалось распарсить PICO: {raw[:200]}",
         }
     
     return pico

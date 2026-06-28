@@ -16,6 +16,12 @@ from src.agents.scoping import scope_field
 from src.agents.critic import critique_sources
 from src.agents.synthesizer import synthesize_report
 from src.utils.pdf_export import report_to_pdf
+from src.web.i18n import get_translations
+
+
+def get_t():
+    """Возвращает словарь переводов для текущего языка из session_state."""
+    return get_translations(st.session_state.get("lang", "ru"))
 from src.agents.meta_checker import check_meta_feasibility
 
 
@@ -194,6 +200,8 @@ def init_session_state():
         st.session_state.question = ""
     if "history" not in st.session_state:
         st.session_state.history = []  # список dict с предыдущими анализами
+    if "lang" not in st.session_state:
+        st.session_state.lang = "ru"
 
 
 def save_to_history(question: str):
@@ -232,8 +240,9 @@ def run_analysis(question: str, max_sources: int):
     try:
         _run_analysis_impl(question, max_sources)
     except Exception as e:
-        st.error(f"Ошибка во время анализа: {e}")
-        st.info("Возможные причины: проблемы с сетью (PubMed/Yandex AI Studio), превышен лимит запросов, или вопрос требует переформулировки.")
+        _T = get_t()
+        st.error(_T["err_analysis"].format(e=e))
+        st.info(_T["err_hint"])
         st.session_state.report = None
 
 
@@ -243,19 +252,20 @@ def _run_analysis_impl(question: str, max_sources: int):
     progress = st.progress(0, text="Подготовка...")
     status = st.empty()
     
-    status.markdown("**Шаг 1 из 6** — Verifier структурирует вопрос в PICO")
+    T = get_t()
+    status.markdown(T["step_1"])
     progress.progress(10)
     pico = verify_question(client, question)
     st.session_state.pico = pico
     
     if not pico.get("is_answerable"):
-        st.session_state.report = f"Вопрос требует уточнения: {pico.get('clarification_needed', '')}"
+        st.session_state.report = T["warn_clarification"].format(text=pico.get("clarification_needed", ""))
         progress.progress(100)
         status.warning(st.session_state.report)
         return
     
     progress.progress(20)
-    status.markdown("**Шаг 2 из 6** — Researcher ищет источники в PubMed")
+    status.markdown(T["step_2"])
     
     queries = pico.get("search_queries", {})
     seen_pmids = set()
@@ -278,28 +288,28 @@ def _run_analysis_impl(question: str, max_sources: int):
     st.session_state.sources = sources
     
     if not sources:
-        st.session_state.report = "По данному запросу источников в PubMed не найдено."
+        st.session_state.report = T["warn_no_sources"]
         progress.progress(100)
         status.warning(st.session_state.report)
         return
     
     progress.progress(40)
-    status.markdown(f"**Шаг 3 из 6** — Scoping картирует научное поле ({len(sources)} источников)")
+    status.markdown(T["step_3"].format(n=len(sources)))
     scoping = scope_field(client, pico, sources)
     st.session_state.scoping = scoping
     
     progress.progress(60)
-    status.markdown("**Шаг 4 из 6** — Critic оценивает качество каждого источника")
+    status.markdown(T["step_4"])
     critiques = critique_sources(client, pico, sources)
     st.session_state.critiques = critiques
     
     progress.progress(80)
-    status.markdown("**Шаг 5 из 6** — Meta-Checker оценивает возможность метаанализа")
+    status.markdown(T["step_5"])
     meta_check = check_meta_feasibility(client, pico, critiques, sources)
     st.session_state.meta_check = meta_check
     
     progress.progress(90)
-    status.markdown("**Шаг 6 из 6** — Synthesizer формирует доказательный отчёт")
+    status.markdown(T["step_6"])
     report = synthesize_report(client, pico, critiques, sources, scoping=scoping, meta_check=meta_check)
     st.session_state.report = report
     
@@ -311,18 +321,19 @@ def _run_analysis_impl(question: str, max_sources: int):
 
 
 def render_pico(pico: dict):
-    st.markdown("## Структурированный вопрос — PICO")
+    T = get_t()
+    st.markdown(f"## {T['pico_heading']}")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown(f"""
         <div class="pico-item">
-            <div class="pico-label">Population</div>
+            <div class="pico-label">{T['pico_pop']}</div>
             <div class="pico-value">{pico.get('population') or '—'}</div>
         </div>
         <div class="pico-item">
-            <div class="pico-label">Intervention</div>
+            <div class="pico-label">{T['pico_int']}</div>
             <div class="pico-value">{pico.get('intervention') or '—'}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -330,18 +341,18 @@ def render_pico(pico: dict):
     with col2:
         st.markdown(f"""
         <div class="pico-item">
-            <div class="pico-label">Comparator</div>
+            <div class="pico-label">{T['pico_comp']}</div>
             <div class="pico-value">{pico.get('comparator') or '—'}</div>
         </div>
         <div class="pico-item">
-            <div class="pico-label">Outcomes</div>
+            <div class="pico-label">{T['pico_out']}</div>
             <div class="pico-value">{pico.get('outcomes') or '—'}</div>
         </div>
         """, unsafe_allow_html=True)
     
     queries = pico.get("search_queries", {})
     if queries:
-        with st.expander("Поисковые запросы в PubMed", expanded=False):
+        with st.expander(T["pico_search_queries"], expanded=False):
             for qtype, q in queries.items():
                 st.markdown(f"**`{qtype}`** — `{q}`")
 
@@ -350,7 +361,8 @@ def render_scoping(scoping: dict):
     if not scoping:
         return
     
-    st.markdown("## Scoping Review — обзор научного поля")
+    T = get_t()
+    st.markdown(f"## {T['scoping_heading']}")
     
     summary = scoping.get("summary", "")
     if summary:
@@ -359,23 +371,23 @@ def render_scoping(scoping: dict):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("**Типы публикаций**")
+        st.markdown(T["scoping_pub_types"])
         for ptype, count in scoping.get("publication_types", {}).items():
             st.markdown(f"- {ptype} — **{count}**")
     
     with col2:
-        st.markdown("**Изучаемые исходы**")
+        st.markdown(T["scoping_outcomes"])
         for o in scoping.get("outcomes_assessed", []):
             st.markdown(f"- {o}")
     
     with col3:
-        st.markdown("**Изученные популяции**")
+        st.markdown(T["scoping_populations"])
         for p in scoping.get("populations_studied", []):
             st.markdown(f"- {p}")
     
     interventions = scoping.get("interventions_compared", [])
     if interventions:
-        st.markdown("**Сравниваемые вмешательства**")
+        st.markdown(T["scoping_interventions"])
         cols = st.columns(min(len(interventions), 3))
         for i, intv in enumerate(interventions):
             with cols[i % len(cols)]:
@@ -383,16 +395,17 @@ def render_scoping(scoping: dict):
     
     gaps = scoping.get("knowledge_gaps", [])
     if gaps:
-        st.markdown("**Пробелы в исследованиях**")
+        st.markdown(T["scoping_gaps"])
         for gap in gaps:
             st.markdown(f"- {gap}")
 
 
 def quality_badge(quality: str) -> str:
+    T = get_t()
     if quality == "high":
-        return '<span class="badge badge-quality-high">высокое</span>'
+        return f'<span class="badge badge-quality-high">{T["quality_high"]}</span>'
     if quality == "moderate":
-        return '<span class="badge badge-quality-mod">умеренное</span>'
+        return f'<span class="badge badge-quality-mod">{T["quality_moderate"]}</span>'
     if quality in ("low", "very_low"):
         return f'<span class="badge badge-quality-low">{quality}</span>'
     return f'<span class="badge badge-evidence">{quality}</span>'
@@ -408,7 +421,8 @@ def render_meta_check(meta_check: dict):
     if not meta_check:
         return
     
-    st.markdown("## Возможность метаанализа")
+    T = get_t()
+    st.markdown(f"## {T['meta_heading']}")
     
     feasibility = meta_check.get("feasibility", "not_possible")
     label = meta_check.get("feasibility_label", "—")
@@ -429,7 +443,7 @@ def render_meta_check(meta_check: dict):
                          border-radius: 8px; font-weight: 600; font-size: 0.9rem;">
                 {label}
             </span>
-            <span style="color: #8B949E;">Включённых РКИ: <b style="color: #E8EAED;">{n_rcts}</b></span>
+            <span style="color: #8B949E;">{T["meta_included_rcts"]}: <b style="color: #E8EAED;">{n_rcts}</b></span>
         </div>
         <div style="color: #E8EAED; font-size: 0.95rem; line-height: 1.5;">
             {meta_check.get("recommendation", "")}
@@ -442,16 +456,16 @@ def render_meta_check(meta_check: dict):
     if homo:
         col1, col2 = st.columns(2)
         homo_label_map = {
-            "homogeneous": ("Однородна", "#2EA043"),
-            "moderately_heterogeneous": ("Умеренно гетерогенна", "#D29922"),
-            "heterogeneous": ("Гетерогенна", "#F85149"),
+            "homogeneous": (T["meta_homo_homogeneous"], "#2EA043"),
+            "moderately_heterogeneous": (T["meta_homo_moderate"], "#D29922"),
+            "heterogeneous": (T["meta_homo_heterogeneous"], "#F85149"),
         }
         with col1:
             pop_val, pop_color = homo_label_map.get(homo.get("population", ""), (homo.get("population", "—"), "#6E7681"))
-            st.markdown(f"**Популяция:** <span style='color: {pop_color};'>{pop_val}</span>", unsafe_allow_html=True)
+            st.markdown(f"**{T['meta_population']}:** <span style='color: {pop_color};'>{pop_val}</span>", unsafe_allow_html=True)
         with col2:
             int_val, int_color = homo_label_map.get(homo.get("intervention", ""), (homo.get("intervention", "—"), "#6E7681"))
-            st.markdown(f"**Вмешательства:** <span style='color: {int_color};'>{int_val}</span>", unsafe_allow_html=True)
+            st.markdown(f"**{T['meta_intervention']}:** <span style='color: {int_color};'>{int_val}</span>", unsafe_allow_html=True)
         
         if homo.get("notes"):
             st.markdown(f"<div style='color: #8B949E; font-size: 0.85rem; margin-top: 0.4rem;'>{homo['notes']}</div>", unsafe_allow_html=True)
@@ -459,14 +473,14 @@ def render_meta_check(meta_check: dict):
     # Исходы с данными
     outcomes = meta_check.get("outcomes_with_enough_data", [])
     if outcomes:
-        st.markdown("**Исходы с достаточностью данных**")
+        st.markdown(T["meta_outcomes_label"])
         for o in outcomes:
             quality = o.get("data_quality", "—")
             q_badge = quality_badge(quality) if quality in ("high", "moderate", "low") else f'<span class="badge badge-evidence">{quality}</span>'
             st.markdown(
                 f"<div class='source-included' style='border-left-color: #2EA043;'>"
                 f"<b>{o.get('outcome', '—')}</b> {q_badge} "
-                f"<span style='color: #8B949E;'>· {o.get('n_studies_reporting', 0)} исследований</span>"
+                f"<span style='color: #8B949E;'>· {o.get('n_studies_reporting', 0)} {T['meta_studies']}</span>"
                 f"<div style='color: #8B949E; font-size: 0.85rem; margin-top: 0.3rem;'>{o.get('notes', '')}</div>"
                 f"</div>",
                 unsafe_allow_html=True
@@ -475,7 +489,7 @@ def render_meta_check(meta_check: dict):
     # Ограничения
     limitations = meta_check.get("limitations", [])
     if limitations:
-        st.markdown("**Ограничения**")
+        st.markdown(T["meta_limitations"])
         for lim in limitations:
             st.markdown(f"- {lim}")
 
@@ -483,16 +497,17 @@ def render_sources(sources: list, critiques: list):
     if not sources:
         return
     
-    st.markdown("## Найденные источники")
+    T = get_t()
+    st.markdown(f"## {T['sources_heading']}")
     
     critiques_by_pmid = {str(c.get("pmid", "")): c for c in (critiques or [])}
     included_count = sum(1 for c in (critiques or []) if c.get("include"))
     excluded_count = len(critiques or []) - included_count
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("Найдено", len(sources))
-    col2.metric("Включено в обзор", included_count)
-    col3.metric("Исключено", excluded_count)
+    col1.metric(T["sources_found"], len(sources))
+    col2.metric(T["sources_included"], included_count)
+    col3.metric(T["sources_excluded"], excluded_count)
     
     st.markdown("")  # spacer
     
@@ -531,17 +546,17 @@ def render_sources(sources: list, critiques: list):
         """
         st.markdown(header_html, unsafe_allow_html=True)
         
-        with st.expander("Подробнее"):
+        with st.expander(T["sources_details"]):
             st.markdown(f"**PubMed:** https://pubmed.ncbi.nlm.nih.gov/{pmid}/")
             if c:
-                st.markdown(f"- **Методика оценки:** {c.get('quality_method', '—')}")
-                st.markdown(f"- **Релевантность PICO:** {c.get('relevance_to_pico', '—')}")
+                st.markdown(f"- **{T['sources_quality_method']}:** {c.get('quality_method', '—')}")
+                st.markdown(f"- **{T['sources_relevance']}:** {c.get('relevance_to_pico', '—')}")
                 if not included:
-                    st.markdown(f"- **Причина исключения:** {c.get('exclude_reason', '—')}")
+                    st.markdown(f"- **{T['sources_exclude_reason']}:** {c.get('exclude_reason', '—')}")
             
             abstract = s.get("abstract", "")
             if abstract:
-                st.markdown("**Абстракт**")
+                st.markdown(f"**{T['sources_abstract']}**")
                 st.markdown(f"> {abstract[:1000]}{'...' if len(abstract) > 1000 else ''}")
 
 
@@ -550,14 +565,11 @@ def render_sources(sources: list, critiques: list):
 init_session_state()
 
 # Hero блок
-st.markdown("""
+_T_main = get_t()
+st.markdown(f"""
 <div class="hero">
-    <div style="font-size: 24px !important; font-weight: 700; color: #E8EAED; margin-bottom: 8px; line-height: 1.2;">🔬 AI-ассистент онкологических исследований</div>
-    <div class="hero-subtitle">
-        Мультиагентная система для систематического обзора литературы по PubMed.
-        Принимает свободный вопрос врача, проводит структурированный анализ доказательной базы
-        и формирует отчёт с цитированием источников.
-    </div>
+    <div style="font-size: 24px !important; font-weight: 700; color: #E8EAED; margin-bottom: 8px; line-height: 1.2;">{_T_main['hero_title']}</div>
+    <div class="hero-subtitle">{_T_main['hero_subtitle']}</div>
     <div class="pipeline-flow">
         Verifier → Researcher → Scoping → Critic → Meta-Checker → Synthesizer
     </div>
@@ -565,9 +577,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("## Настройки")
+    # Переключатель языка
+    lang_choice = st.selectbox(
+        "🌐 Language / Язык",
+        options=["ru", "en"],
+        format_func=lambda x: "Русский" if x == "ru" else "English",
+        index=0 if st.session_state.get("lang", "ru") == "ru" else 1,
+        key="lang_selector",
+    )
+    if lang_choice != st.session_state.get("lang"):
+        st.session_state.lang = lang_choice
+        st.rerun()
+    
+    T = get_t()
+    
+    st.markdown(f"## {T['settings']}")
     max_sources = st.slider(
-        "Максимум источников",
+        T['max_sources'],
         min_value=5,
         max_value=20,
         value=10,
@@ -575,17 +601,13 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.markdown("## Стек")
-    st.markdown("""
-- **LLM**: Yandex AI Studio  
-- **Поиск**: PubMed E-utilities  
-- **Методики**: PICO, RoB 2.0, ROBINS-I, STROBE, Oxford CEBM
-    """)
+    st.markdown(f"## {T['stack']}")
+    st.markdown(T['stack_body'])
     
     # История запросов
     if st.session_state.get("history"):
         st.markdown("---")
-        st.markdown("## История")
+        st.markdown(f"## {T['history']}")
         for i, entry in enumerate(st.session_state.history):
             q = entry["question"]
             short = q[:60] + "..." if len(q) > 60 else q
@@ -594,36 +616,33 @@ with st.sidebar:
                 st.rerun()
     
     st.markdown("---")
-    st.markdown("## ⚠️ Этика")
+    st.markdown(f"## {T['ethics']}")
     st.markdown(
-        "<div style='font-size: 0.85rem; color: #8B949E;'>"
-        "Этот ассистент <b>не заменяет</b> клинические рекомендации. "
-        "Решения принимает врач, опираясь на актуальные guidelines (NCCN, ESMO, RUSSCO)."
-        "</div>",
+        f"<div style='font-size: 0.85rem; color: #8B949E;'>{T['ethics_body']}</div>",
         unsafe_allow_html=True
     )
 
 # Поле ввода
 question = st.text_area(
-    "Клинический вопрос",
+    _T_main['question_label'],
     value=st.session_state.question,
     height=100,
-    placeholder="Какова эффективность osimertinib при NSCLC с мутацией EGFR T790M после прогрессии на гефитинибе?",
+    placeholder=_T_main['question_placeholder'],
     label_visibility="visible",
 )
 
 col_run, col_reset, _ = st.columns([2, 2, 8])
 with col_run:
-    run_clicked = st.button("🔍 Запустить анализ", type="primary")
+    run_clicked = st.button(_T_main['btn_run'], type="primary")
 with col_reset:
-    if st.button("Очистить"):
+    if st.button(_T_main['btn_clear']):
         reset_results()
         st.session_state.question = ""
         st.rerun()
 
 if run_clicked:
     if not question.strip():
-        st.error("Введите вопрос для анализа")
+        st.error(_T_main['err_empty_question'])
     else:
         st.session_state.question = question
         reset_results()
@@ -643,13 +662,14 @@ if st.session_state.meta_check:
     render_meta_check(st.session_state.meta_check)
 
 if st.session_state.report:
-    st.markdown("## Финальный аналитический отчёт")
+    _T = get_t()
+    st.markdown(f"## {_T['report_heading']}")
     st.markdown(st.session_state.report)
     
     col_md, col_pdf = st.columns(2)
     with col_md:
         st.download_button(
-            "📄 Скачать Markdown",
+            _T["btn_download_md"],
             data=st.session_state.report,
             file_name="oncology_report.md",
             mime="text/markdown",
@@ -659,11 +679,11 @@ if st.session_state.report:
         try:
             pdf_bytes = report_to_pdf(st.session_state.report, st.session_state.get("question", ""))
             st.download_button(
-                "📕 Скачать PDF",
+                _T["btn_download_pdf"],
                 data=pdf_bytes,
                 file_name="oncology_report.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
         except Exception as e:
-            st.warning(f"Не удалось сгенерировать PDF: {e}")
+            st.warning(_T["err_pdf"].format(e=e))

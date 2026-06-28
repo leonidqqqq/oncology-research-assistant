@@ -7,3 +7,7 @@ requests==2.32.3
 
 # Web UI
 streamlit==1.58.0
+
+# PDF-экспорт (markdown → HTML → PDF через xhtml2pdf, кириллица через DejaVu)
+xhtml2pdf==0.2.17
+markdown==3.10.2

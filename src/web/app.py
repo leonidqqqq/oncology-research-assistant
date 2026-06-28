@@ -182,12 +182,44 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+MAX_HISTORY = 5
+
+
 def init_session_state():
     for k in ["pico", "sources", "scoping", "critiques", "meta_check", "report"]:
         if k not in st.session_state:
             st.session_state[k] = None
     if "question" not in st.session_state:
         st.session_state.question = ""
+    if "history" not in st.session_state:
+        st.session_state.history = []  # список dict с предыдущими анализами
+
+
+def save_to_history(question: str):
+    """Сохраняет текущий результат анализа в историю (последние MAX_HISTORY запросов)."""
+    if not st.session_state.get("report"):
+        return  # не сохраняем неудачные / пустые
+    
+    entry = {
+        "question": question,
+        "pico": st.session_state.pico,
+        "sources": st.session_state.sources,
+        "scoping": st.session_state.scoping,
+        "critiques": st.session_state.critiques,
+        "meta_check": st.session_state.meta_check,
+        "report": st.session_state.report,
+    }
+    # Удаляем дубликаты (если такой же вопрос уже был — обновляем)
+    st.session_state.history = [h for h in st.session_state.history if h["question"] != question]
+    st.session_state.history.insert(0, entry)
+    st.session_state.history = st.session_state.history[:MAX_HISTORY]
+
+
+def restore_from_history(entry: dict):
+    """Восстанавливает данные предыдущего анализа в session_state."""
+    st.session_state.question = entry["question"]
+    for k in ["pico", "sources", "scoping", "critiques", "meta_check", "report"]:
+        st.session_state[k] = entry.get(k)
 
 
 def reset_results():
@@ -272,6 +304,9 @@ def _run_analysis_impl(question: str, max_sources: int):
     
     progress.progress(100)
     status.empty()
+    
+    # Сохраняем успешный анализ в историю
+    save_to_history(question)
 
 
 def render_pico(pico: dict):
@@ -545,6 +580,17 @@ with st.sidebar:
 - **Поиск**: PubMed E-utilities  
 - **Методики**: PICO, RoB 2.0, ROBINS-I, STROBE, Oxford CEBM
     """)
+    
+    # История запросов
+    if st.session_state.get("history"):
+        st.markdown("---")
+        st.markdown("## История")
+        for i, entry in enumerate(st.session_state.history):
+            q = entry["question"]
+            short = q[:60] + "..." if len(q) > 60 else q
+            if st.button(short, key=f"hist_{i}", use_container_width=True, help=q):
+                restore_from_history(entry)
+                st.rerun()
     
     st.markdown("---")
     st.markdown("## ⚠️ Этика")

@@ -1,0 +1,36 @@
+{
+  "description": "Эталонные клинические вопросы с известными landmark trials. Метрика: содержится ли landmark PMID в top-K источников, найденных Researcher.",
+  "version": "1.0",
+  "cases": [
+    {
+      "id": "case_01_pembro_nsclc",
+      "question": "Какова эффективность пембролизумаба в первой линии терапии метастатического NSCLC с экспрессией PD-L1 >=50% по сравнению с платиносодержащей химиотерапией?",
+      "landmark_pmids": ["27718847", "33872070"],
+      "landmark_description": "KEYNOTE-024 (Reck 2016) и KEYNOTE-024 5-year follow-up (Reck 2021)"
+    },
+    {
+      "id": "case_02_osimertinib_first_line",
+      "question": "Какова эффективность osimertinib в первой линии терапии EGFR-мутантного метастатического NSCLC по сравнению с гефитинибом и эрлотинибом?",
+      "landmark_pmids": ["29151359", "31751012"],
+      "landmark_description": "FLAURA (Soria 2018) и FLAURA OS update (Ramalingam 2020)"
+    },
+    {
+      "id": "case_03_trastuzumab_deruxtecan",
+      "question": "Эффективность trastuzumab deruxtecan по сравнению с trastuzumab emtansine при HER2-положительном метастатическом раке молочной железы?",
+      "landmark_pmids": ["35320665"],
+      "landmark_description": "DESTINY-Breast03 (Cortes 2022)"
+    },
+    {
+      "id": "case_04_nivo_ipi_melanoma",
+      "question": "Какова эффективность комбинации nivolumab + ipilimumab по сравнению с монотерапией ипилимумабом при метастатической меланоме?",
+      "landmark_pmids": ["28889792", "26027431"],
+      "landmark_description": "CheckMate 067 update (Larkin 2017) и оригинальная публикация (Larkin 2015)"
+    },
+    {
+      "id": "case_05_olaparib_brca",
+      "question": "Эффективность olaparib в качестве поддерживающей терапии у пациентов с платиночувствительным рецидивом серозного рака яичников с мутациями BRCA1/2?",
+      "landmark_pmids": ["28754483", "32717082"],
+      "landmark_description": "SOLO2 (Pujade-Lauraine 2017) и SOLO2 OS final (Poveda 2021)"
+    }
+  ]
+}

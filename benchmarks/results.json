@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-06-28T16:39:59.885647",
+  "results": [
+    {
+      "id": "case_01_pembro_nsclc",
+      "question_short": "Какова эффективность пембролизумаба в первой линии терапии метастатического NSCLC с экспрессией PD-L1 >=50% по сравнению",
+      "total_found": 7,
+      "included_after_critic": 3,
+      "landmark_pmids": [
+        "27718847",
+        "33872070"
+      ],
+      "landmark_found": [
+        "27718847",
+        "33872070"
+      ],
+      "recall_at_10": 1.0,
+      "elapsed_s": 18.5
+    },
+    {
+      "id": "case_02_osimertinib_first_line",
+      "question_short": "Какова эффективность osimertinib в первой линии терапии EGFR-мутантного метастатического NSCLC по сравнению с гефитинибо",
+      "total_found": 6,
+      "included_after_critic": 3,
+      "landmark_pmids": [
+        "29151359",
+        "31751012"
+      ],
+      "landmark_found": [
+        "29151359",
+        "31751012"
+      ],
+      "recall_at_10": 1.0,
+      "elapsed_s": 15.5
+    },
+    {
+      "id": "case_03_trastuzumab_deruxtecan",
+      "question_short": "Эффективность trastuzumab deruxtecan по сравнению с trastuzumab emtansine при HER2-положительном метастатическом раке мо",
+      "total_found": 6,
+      "included_after_critic": 4,
+      "landmark_pmids": [
+        "35320665"
+      ],
+      "landmark_found": [],
+      "recall_at_10": 0.0,
+      "elapsed_s": 15.7
+    },
+    {
+      "id": "case_04_nivo_ipi_melanoma",
+      "question_short": "Какова эффективность комбинации nivolumab + ipilimumab по сравнению с монотерапией ипилимумабом при метастатической мела",
+      "total_found": 6,
+      "included_after_critic": 3,
+      "landmark_pmids": [
+        "26027431",
+        "28889792"
+      ],
+      "landmark_found": [
+        "26027431"
+      ],
+      "recall_at_10": 0.5,
+      "elapsed_s": 15.0
+    },
+    {
+      "id": "case_05_olaparib_brca",
+      "question_short": "Эффективность olaparib в качестве поддерживающей терапии у пациентов с платиночувствительным рецидивом серозного рака яи",
+      "total_found": 6,
+      "included_after_critic": 2,
+      "landmark_pmids": [
+        "28754483",
+        "32717082"
+      ],
+      "landmark_found": [
+        "28754483"
+      ],
+      "recall_at_10": 0.5,
+      "elapsed_s": 15.8
+    }
+  ]
+}

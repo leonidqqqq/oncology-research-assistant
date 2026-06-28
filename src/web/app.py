@@ -15,7 +15,11 @@ from src.agents.researcher import search_pubmed_direct
 from src.agents.scoping import scope_field
 from src.agents.critic import critique_sources
 from src.agents.synthesizer import synthesize_report
-from src.utils.pdf_export import report_to_pdf
+try:
+    from src.utils.pdf_export import report_to_pdf
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
 from src.web.i18n import get_translations
 
 
@@ -676,14 +680,17 @@ if st.session_state.report:
             use_container_width=True,
         )
     with col_pdf:
-        try:
-            pdf_bytes = report_to_pdf(st.session_state.report, st.session_state.get("question", ""))
-            st.download_button(
-                _T["btn_download_pdf"],
-                data=pdf_bytes,
-                file_name="oncology_report.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        except Exception as e:
-            st.warning(_T["err_pdf"].format(e=e))
+        if PDF_AVAILABLE:
+            try:
+                pdf_bytes = report_to_pdf(st.session_state.report, st.session_state.get("question", ""))
+                st.download_button(
+                    _T["btn_download_pdf"],
+                    data=pdf_bytes,
+                    file_name="oncology_report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.warning(_T["err_pdf"].format(e=e))
+        else:
+            st.caption("PDF: установите markdown-pdf локально")

@@ -15,6 +15,7 @@ from src.agents.researcher import search_pubmed_direct
 from src.agents.scoping import scope_field
 from src.agents.critic import critique_sources
 from src.agents.synthesizer import synthesize_report
+from src.utils.pdf_export import report_to_pdf
 from src.agents.meta_checker import check_meta_feasibility
 
 
@@ -645,9 +646,24 @@ if st.session_state.report:
     st.markdown("## Финальный аналитический отчёт")
     st.markdown(st.session_state.report)
     
-    st.download_button(
-        "📥 Скачать отчёт (Markdown)",
-        data=st.session_state.report,
-        file_name="oncology_report.md",
-        mime="text/markdown",
-    )
+    col_md, col_pdf = st.columns(2)
+    with col_md:
+        st.download_button(
+            "📄 Скачать Markdown",
+            data=st.session_state.report,
+            file_name="oncology_report.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with col_pdf:
+        try:
+            pdf_bytes = report_to_pdf(st.session_state.report, st.session_state.get("question", ""))
+            st.download_button(
+                "📕 Скачать PDF",
+                data=pdf_bytes,
+                file_name="oncology_report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.warning(f"Не удалось сгенерировать PDF: {e}")

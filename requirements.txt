@@ -7,3 +7,6 @@ requests==2.32.3
 
 # Web UI
 streamlit==1.58.0
+
+# PDF-экспорт отчёта
+markdown-pdf==1.13.2

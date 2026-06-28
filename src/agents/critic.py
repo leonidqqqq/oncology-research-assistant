@@ -4,6 +4,9 @@ import re
 from openai import OpenAI
 
 from src.utils.llm_client import call_llm, extract_json
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 CRITIC_PROMPT = """Ты — Critic-агент в системе AI-ассистента для онкологов.
@@ -130,9 +133,9 @@ Outcomes: {pico.get('outcomes', '')}
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError as e:
-        print(f"[Critic] WARNING: не удалось распарсить JSON ({e}). Длина ответа: {len(raw)} символов")
-        print(f"[Critic] Первые 300 символов: {raw[:300]}")
-        print(f"[Critic] Последние 100 символов: ...{raw[-100:]}")
+        log.warning(f"не удалось распарсить JSON ({e}). Длина ответа: {len(raw)} символов")
+        log.warning(f"Первые 300 символов: {raw[:300]}")
+        log.warning(f"Последние 100 символов: ...{raw[-100:]}")
         return []
     
     # Поддерживаем оба формата: {"assessments": [...]} и просто [...]
@@ -141,7 +144,7 @@ Outcomes: {pico.get('outcomes', '')}
     elif isinstance(parsed, list):
         assessments = parsed
     else:
-        print(f"[Critic] WARNING: неожиданный тип ответа: {type(parsed).__name__}")
+        log.warning(f"неожиданный тип ответа: {type(parsed).__name__}")
         return []
     
     if not isinstance(assessments, list):

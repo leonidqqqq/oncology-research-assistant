@@ -4,6 +4,9 @@ import re
 from openai import OpenAI
 
 from src.utils.llm_client import call_llm, extract_json
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 VERIFIER_PROMPT = """Ты — Verifier-агент в системе AI-ассистента для онкологов.
@@ -73,12 +76,12 @@ def verify_question(client: OpenAI, question: str) -> dict:
     try:
         pico = json.loads(cleaned)
         if not isinstance(pico, dict):
-            print(f"[Verifier] WARNING: ожидался dict, получили {type(pico).__name__}")
-            print(f"[Verifier] Первые 300 символов: {raw[:300]}")
+            log.warning(f"ожидался dict, получили {type(pico).__name__}")
+            log.warning(f"Первые 300 символов: {raw[:300]}")
             raise ValueError("not a dict")
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"[Verifier] WARNING: не удалось распарсить JSON ({e})")
-        print(f"[Verifier] Первые 300 символов: {raw[:300]}")
+        log.warning(f"не удалось распарсить JSON ({e})")
+        log.warning(f"Первые 300 символов: {raw[:300]}")
         return {
             "population": "parse error",
             "intervention": "parse error",

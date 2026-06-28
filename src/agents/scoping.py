@@ -8,6 +8,9 @@ import json
 from openai import OpenAI
 
 from src.utils.llm_client import call_llm, extract_json
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 SCOPING_PROMPT = """Ты — Scoping-агент в системе AI-ассистента для онкологов.
@@ -96,10 +99,10 @@ Outcomes: {pico.get('outcomes', '')}
     try:
         scoping = json.loads(cleaned)
         if not isinstance(scoping, dict):
-            print(f"[Scoping] WARNING: ожидался dict, получили {type(scoping).__name__}")
+            log.warning(f"ожидался dict, получили {type(scoping).__name__}")
             return {}
         return scoping
     except json.JSONDecodeError as e:
-        print(f"[Scoping] WARNING: не удалось распарсить JSON ({e})")
-        print(f"[Scoping] Первые 300 символов: {raw[:300]}")
+        log.warning(f"не удалось распарсить JSON ({e})")
+        log.warning(f"Первые 300 символов: {raw[:300]}")
         return {}

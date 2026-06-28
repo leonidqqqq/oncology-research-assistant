@@ -4,6 +4,10 @@ import time
 import xml.etree.ElementTree as ET
 from typing import Optional
 
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
+
 # Streamlit кэш — если приложение запущено под Streamlit,
 # одинаковые запросы будут возвращаться из кэша (TTL 1 час).
 # Это снижает нагрузку на PubMed и ускоряет повторные запросы.
@@ -73,13 +77,13 @@ def search_pubmed_direct(query: str, max_results: int = 10) -> list:
     
     r = _http_get_with_retry(esearch_url, esearch_params, timeout=15)
     if r is None:
-        print(f"  [WARN] PubMed esearch недоступен для запроса: {query}")
+        log.warning(f"PubMed esearch недоступен для запроса: {query}")
         return []
     
     try:
         pmids = r.json().get("esearchresult", {}).get("idlist", [])
     except ValueError:
-        print(f"  [WARN] PubMed вернул невалидный JSON для запроса: {query}")
+        log.warning(f"PubMed вернул невалидный JSON для запроса: {query}")
         return []
     
     if not pmids:
@@ -98,13 +102,13 @@ def search_pubmed_direct(query: str, max_results: int = 10) -> list:
     
     r = _http_get_with_retry(efetch_url, efetch_params, timeout=20)
     if r is None:
-        print(f"  [WARN] PubMed efetch недоступен для запроса: {query}")
+        log.warning(f"PubMed efetch недоступен для запроса: {query}")
         return []
     
     try:
         root = ET.fromstring(r.text)
     except ET.ParseError as e:
-        print(f"  [WARN] PubMed вернул битый XML: {e}")
+        log.warning(f"PubMed вернул битый XML: {e}")
         return []
     
     results = []

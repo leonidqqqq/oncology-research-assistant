@@ -3,6 +3,10 @@ import os
 import time
 from openai import OpenAI
 
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
+
 
 YANDEX_BASE_URL = "https://llm.api.cloud.yandex.net/v1"
 
@@ -121,8 +125,8 @@ def call_llm(
             
             if is_retriable and attempt < max_retries - 1:
                 wait = RETRY_DELAYS[attempt]
-                print(f"[{agent}] Временная ошибка (попытка {attempt+1}/{max_retries}): {err_str[:200]}")
-                print(f"[{agent}] Жду {wait} сек и повторяю...")
+                log.warning(f"[{agent}] Временная ошибка (попытка {attempt+1}/{max_retries}): {err_str[:200]}")
+                log.info(f"[{agent}] Жду {wait} сек и повторяю...")
                 time.sleep(wait)
                 continue
             

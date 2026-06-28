@@ -11,6 +11,9 @@ import re
 from openai import OpenAI
 
 from src.utils.llm_client import call_llm, extract_json
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 META_CHECKER_PROMPT = """Ты — Meta-Analysis Feasibility Checker в системе AI-ассистента для онкологов.
@@ -148,10 +151,10 @@ Outcomes: {pico.get('outcomes', '')}
     try:
         result = json.loads(cleaned)
         if not isinstance(result, dict):
-            print(f"[MetaChecker] WARNING: ожидался dict, получили {type(result).__name__}")
+            log.warning(f"ожидался dict, получили {type(result).__name__}")
             return {}
         return result
     except json.JSONDecodeError as e:
-        print(f"[MetaChecker] WARNING: не удалось распарсить JSON ({e})")
-        print(f"[MetaChecker] Первые 300 символов: {raw[:300]}")
+        log.warning(f"не удалось распарсить JSON ({e})")
+        log.warning(f"Первые 300 символов: {raw[:300]}")
         return {}

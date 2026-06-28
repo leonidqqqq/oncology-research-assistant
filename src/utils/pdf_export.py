@@ -62,13 +62,17 @@ table {
     border-collapse: collapse;
     width: 100%;
     margin: 10pt 0;
-    font-size: 9pt;
+    font-size: 8pt;
+    -pdf-keep-in-frame-mode: shrink;
+    table-layout: auto;
 }
 th, td {
     border: 1px solid #ccc;
-    padding: 6pt 8pt;
+    padding: 4pt 6pt;
     text-align: left;
     vertical-align: top;
+    word-wrap: break-word;
+    -pdf-word-wrap: CJK;
 }
 th {
     background: #e2e8f0;

@@ -4,6 +4,17 @@ import time
 import xml.etree.ElementTree as ET
 from typing import Optional
 
+# Streamlit кэш — если приложение запущено под Streamlit,
+# одинаковые запросы будут возвращаться из кэша (TTL 1 час).
+# Это снижает нагрузку на PubMed и ускоряет повторные запросы.
+try:
+    import streamlit as st
+    _CACHE_DECORATOR = st.cache_data(ttl=3600, show_spinner=False)
+except ImportError:
+    # Если streamlit недоступен (CLI-режим) — кэш не применяется
+    def _CACHE_DECORATOR(func):
+        return func
+
 NCBI_TOOL = "hakatonleo3-oncology-assistant"
 NCBI_EMAIL = "hakatonleo3@example.com"
 USER_AGENT = f"{NCBI_TOOL}/1.0 (mailto:{NCBI_EMAIL})"
@@ -42,6 +53,7 @@ def _http_get_with_retry(url: str, params: dict, timeout: int = 20) -> Optional[
     return None
 
 
+@_CACHE_DECORATOR
 def search_pubmed_direct(query: str, max_results: int = 10) -> list:
     """Прямой поиск в PubMed с извлечением абстрактов.
     

@@ -184,7 +184,6 @@ report = synthesize_report(client, pico, critiques, sources, scoping=scoping, me
 
 - Поддержка Embase (требует платной подписки и другого API)
 - Кэширование PubMed-запросов (одинаковые запросы повторно дёргают API)
-- Юнит-тесты на агенты
 - Метрики качества (precision/recall на размеченном наборе вопросов)
 - Multi-language UI
 

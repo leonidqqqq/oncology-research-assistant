@@ -51,6 +51,13 @@
 
 Подробности — [DEPLOY.md](DEPLOY.md).
 
+## Тесты
+
+    pip install -r requirements-dev.txt
+    pytest tests/ -v
+
+16 тестов покрывают: парсинг JSON, обработку ошибок в pipeline, retry-логику Researcher на 429/503, моки на полный e2e-проход.
+
 ## Документация
 
 - [docs/overview.md](docs/overview.md) — проблема, цель, сценарии использования
